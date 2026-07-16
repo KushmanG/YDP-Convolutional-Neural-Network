@@ -1,10 +1,5 @@
 # CNN for Predicting the Coupling and Screening Parameters of a Dusty Plasma from a Single Snapshot
 
-<p align="center">
-  <img src="https://img.shields.io/badge/python-3.11-blue" alt="Python 3.11">
-  <img src="https://img.shields.io/badge/PyTorch-2.13-orange" alt="PyTorch 2.13">
-  <img src="https://img.shields.io/badge/status-pilot%20validated-yellow" alt="status">
-</p>
 
 A convolutional neural network that reads a single static snapshot of a 2D Yukawa (dusty) plasma — just particle positions, no dynamics — and predicts the two parameters that define its physical state: the coupling parameter $\Gamma$ and the screening parameter $\kappa$.
 
