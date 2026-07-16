@@ -48,6 +48,7 @@ We follow the standard training loop using Adam optimizer and Smooth L1 Loss
 
 
 best_validation_loss = float("inf")
+best_training_loss = float("inf")
 for epochs in range(g_configs.EPOCHS):
     # Training Loop
     model.train()
@@ -96,8 +97,10 @@ for epochs in range(g_configs.EPOCHS):
         best_validation_loss = validation_loss
         torch.save(model.state_dict(), g_configs.CKPT_PATH)
 
+    if running_loss < best_training_loss:
+        best_training_loss = running_loss
     # I decided to put the print part in the end so that we can also get the updated best val loss
-    print(f"EPOCH: [{epochs+1}/{g_configs.EPOCHS}]\nTRAIN LOSS: {running_loss:.4f}\nVALIDATION LOSS: {validation_loss:.4f}\nLeast Validation Loss Yet: {best_validation_loss:.4f}")
+    print(f"EPOCH: [{epochs+1}/{g_configs.EPOCHS}]\nTRAIN LOSS: {running_loss:.4f}\nVALIDATION LOSS: {validation_loss:.4f}\nLeast Validation Loss Yet: {best_validation_loss:.4f}\nLeast Training Loss Yet: {best_training_loss:.4f}")
 
 
 

@@ -15,11 +15,6 @@ def read_manifest(manifest_path):
         for row in reader:
             rows.append({"sample_id": int(row["sample_id"]), "gamma": float(row["gamma"]), "kappa": float(row["kappa"]), "seed": int(row["seed"])})
 
-    '''
-    Sorting it as per seed numbers, this way the first train_frac fraction of seeds all go to the train array directly and so on
-    '''
-    rows = sorted(rows, key = lambda r: (r["seed"]))
-
     return rows
 
 '''
@@ -35,19 +30,25 @@ So we need to iterate through all gamma-kappa pairs and give like 70% to Train, 
 '''
 
 def split(rows, train_fraction = 0.7, val_fraction = 0.15):
-    N = len(rows)
-    n1 = round(train_fraction * N)
-    n2 = round(val_fraction * N)
+    # Stratified split: bucket the rows by their (gamma, kappa) cell first, so the
+    # fractions apply WITHIN every cell instead of across the manifest's ordering.
+    # This way every cell shows up in every split, no matter how the file is sorted.
+    cells = {}
+    for row in rows:
+        cells.setdefault((row["gamma"], row["kappa"]), []).append(row)
+
     train, val, test = [], [], []
-    for i in range(0, n1):
-        train.append(rows[i])
-    
-    for i in range(n1, n1+n2):
-        val.append(rows[i])
-    
-    for i in range(n1+n2, N):
-        test.append(rows[i])
-    
+    for bucket in cells.values():
+        n = len(bucket)
+        n_train = round(train_fraction * n)
+        n_val = round(val_fraction * n)
+
+        # test takes whatever remains (never rounded separately), so the three
+        # pieces always add back up to the full bucket
+        train.extend(bucket[:n_train])
+        val.extend(bucket[n_train : n_train + n_val])
+        test.extend(bucket[n_train + n_val:])
+
     return train, val, test
 
 

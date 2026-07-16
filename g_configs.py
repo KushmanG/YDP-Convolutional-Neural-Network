@@ -6,7 +6,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # Data storage and access directory name
 
 # You can change the name of the directory frm which you want the data frm here
-DATA_DIR = os.path.join(HERE, "datasets", "data_27pts") 
+DATA_DIR = os.path.join(HERE, "datasets", "data_2000pts") 
 MANIFEST = os.path.join(DATA_DIR, "manifest.csv")
 
 # Rasterization 0arameters
@@ -28,7 +28,7 @@ CKPT_DIR  = os.path.join(HERE, "checkpoints")
 CKPT_PATH = os.path.join(CKPT_DIR, "best.pt")
 OUT_DIR   = os.path.join(HERE, "Diagnostics", "outputs")
 
-# --- device (Apple GPU if present, else CUDA, else CPU) ---------------------
+# Device selection
 if torch.backends.mps.is_available():
     DEVICE = "mps"
 elif torch.cuda.is_available():

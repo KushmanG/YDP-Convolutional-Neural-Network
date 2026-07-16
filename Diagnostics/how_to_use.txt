@@ -1,0 +1,139 @@
+HOW TO USE THE DIAGNOSTICS
+[Thanks to Claude Fable 5 for writing this cz I was kinda lazy to explain this, I mean any Physicist will know all of this anyway]
+==========================
+
+A training run leaves four artifacts behind. Read them in this order — each
+stage narrows the diagnosis:
+
+    1. training.txt          did learning happen at all?
+    2. outputs/metrics.txt   how good is it, in physical units?
+    3. pred_vs_true.png      what KIND of wrong is it?
+    4. error_heatmap.png     WHERE in the phase plane is it wrong?
+
+The golden rule: anything wrong-SHAPED (a nan, an inf, a perfectly vertical
+column of dots, a val loss that never settles) is a lead to chase, not noise
+to ignore. Wrong-shaped numbers usually have exactly one cause; merely
+disappointing numbers have a dozen.
+
+
+1. training.txt — the process
+-----------------------------
+One entry per epoch: train loss, validation loss, best validation loss so far.
+Read the two losses as curves and match them to a pattern:
+
+    train falls, val falls, both settle close together
+        -> healthy run. The gap between them is the generalization cost.
+
+    train falls toward zero, val bottoms out then creeps up
+        -> overfitting. The epoch where val bottomed is the model you want
+           (that is the checkpoint that was saved). More data, more
+           augmentation, or more regularization to push the bottom later.
+
+    both stuck high, barely moving
+        -> underfitting. Learning rate too small, model too weak, or the
+           input genuinely does not contain the signal.
+
+    loss becomes nan
+        -> learning rate too high, or a corrupted sample in the data.
+
+    val loss oscillates wildly with no stable minimum
+        -> the val set is measuring something unstable. Check the split:
+           is val actually drawn from the same distribution as train?
+           (This exact symptom is how the pilot's split bug was found.)
+
+Note that train loss is measured in training mode (dropout active, batchnorm
+per-batch, augmentation on) while val is measured in eval mode — so val loss
+slightly BELOW train loss is normal and not suspicious.
+
+
+2. outputs/metrics.txt — the headline numbers
+---------------------------------------------
+Three rows (gamma, kappa, log10 gamma), two numbers each, computed on the
+held-out split only:
+
+MAE — mean absolute error, average |prediction - truth| in PHYSICAL units.
+    Answers: "how far off, typically?" Judge it against the range of the
+    variable: kappa MAE of 0.6 on a range of 1-3 is a big miss; gamma MAE of
+    161 when gamma spans 2-1200 needs the log10 row to interpret properly
+    (gamma errors are multiplicative — a log10 MAE of 0.20 means predictions
+    are typically off by a factor of 10^0.20 ≈ 1.6x).
+
+R² — fraction of the variance in the true values that predictions explain.
+    Answers: "is there real skill here?"
+        1.0        perfect
+        0.0        no better than always guessing the mean
+        negative   WORSE than guessing the mean (loud alarm)
+        nan        the true values have zero variance — the split gave this
+                   metric nothing to explain. That is a DATA bug, not a
+                   model failure. Go inspect the split.
+
+Use both together: MAE without R² can hide zero skill; R² without MAE can
+hide physically useless error bars.
+
+
+3. outputs/pred_vs_true.png — what kind of wrong
+------------------------------------------------
+Parity plots, one panel per target. Every dot is one held-out sample;
+the dashed line is y = x (perfection). Three questions, in order:
+
+    Are the dots ON the line?
+        Distance from the line IS the error, visually.
+
+    Do the dots TRACK the line?
+        Even if offset, dots rising with the line mean the model ranks
+        samples correctly — there is signal, just miscalibrated.
+
+    Is the error SYSTEMATIC or RANDOM?
+        All dots on one side of the line = bias (e.g. consistent
+        underprediction; on the gamma panel this often means the model is
+        being asked to extrapolate).
+        Dots compressed toward the middle of the range = hedging: the model
+        has learned "predict the mean-ish value" instead of reading the
+        input. This shows up as a flat-ish cloud and a bad R² despite a
+        moderate MAE. It usually means the signal for that target is weak
+        in the input representation — consider whether preprocessing
+        (e.g. blob_sigma blur) is erasing it.
+        A perfectly VERTICAL column of dots = every truth is identical =
+        broken split (see the nan discussion above).
+
+
+4. outputs/error_heatmap.png — where it is wrong
+------------------------------------------------
+The (gamma, kappa) phase plane, one dot per cell, colored by mean relative
+gamma error. Physics reading:
+
+    Uniform error everywhere
+        -> model limitation or data starvation, nothing physical.
+
+    Errors concentrated at intermediate gamma
+        -> expected physics: extremes are easy (dilute liquid vs perfect
+           crystal are visually unmistakable); the strongly-coupled liquid
+           near the melting line is genuinely ambiguous from structure
+           alone. If the melting line lights up, the model is failing
+           exactly where the physics is hardest — a meaningful result,
+           not a bug.
+
+    One isolated hot cell
+        -> check the samples in that cell before theorizing (bad seed?
+           rasterization artifact?).
+
+CAVEAT: divide your confidence by the number of val seeds per cell. With
+1 seed per cell (27-sample pilot), every heatmap dot is a SINGLE sample and
+cell-to-cell differences are mostly luck. Patterns become trustworthy on the
+full dataset (3 val seeds per cell at 0.7/0.15/0.15).
+
+
+After reading everything: what to change
+----------------------------------------
+    Underfitting          -> raise LR, train longer, or grow the model
+                             (g_configs.py: LR, EPOCHS)
+    Overfitting           -> more data, stronger augmentation, more dropout /
+                             weight decay
+    Kappa hedging         -> try smaller BLOB_SIGMA (blur may be erasing the
+                             fine structure kappa lives in), or more data
+    nan / vertical column -> inspect the split in c_dataset.py, not the model
+    Loss nan              -> lower LR; check for corrupted samples
+
+Change ONE knob per run, re-run train + eval, and compare the new metrics.txt
+against the previous one (old versions live in git history). Two changes at
+once means you learn nothing from the comparison.
