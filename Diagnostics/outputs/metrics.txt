@@ -1,0 +1,4 @@
+split: val (9 samples)
+gamma     MAE = 528.815   R2 = nan
+kappa     MAE = 0.385787   R2 = 0.7457
+log10g    MAE = 0.284306   R2 = nan
